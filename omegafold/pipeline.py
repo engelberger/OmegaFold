@@ -201,8 +201,8 @@ def fasta2inputs(
                 assert 0 <= position_to_be_masked <= num_res, \
                     "position_to_be_masked should be within the range of sequence length"
                 print("IT WORKED!")
-                p_msa_mask = torch.zeros([num_pseudo_msa, num_res])
-                p_msa_mask[:, position_to_be_masked] = 1
+                p_msa_mask = torch.ones([num_pseudo_msa, num_res])
+                p_msa_mask[:, position_to_be_masked] = 0
             
             # this writes the current mask (p_msa_mask) to the tensor file 
             tensor_file.write("p_msa_mask 1 inside pipeline.py:\n" + str(p_msa_mask.tolist()))
