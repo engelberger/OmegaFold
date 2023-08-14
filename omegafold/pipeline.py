@@ -94,7 +94,8 @@ def fasta2inputs(
         device: typing.Optional[torch.device] = torch.device('cpu'),
         mask_rate: float = 0.12,
         num_cycle: int = 10,
-        deterministic: bool = True
+        deterministic: bool = True,
+        position_to_be_masked: int = None
 ) -> typing.Generator[
     typing.Tuple[torch.Tensor, torch.Tensor, torch.Tensor, str], None, None]:
     """
@@ -180,18 +181,59 @@ def fasta2inputs(
         if deterministic:
             g = torch.Generator()
             g.manual_seed(num_res)
+        tensor_file = open("tensor.txt", "w")
+
+        # the number of cycles as set by num_cycle
         for _ in range(num_cycle):
+            # aatype is repeated for num_pseudo_msa times to generate all the pseudo msas
             p_msa = aatype[None, :].repeat(num_pseudo_msa, 1)
-            p_msa_mask = torch.rand(
-                [num_pseudo_msa, num_res], generator=g
-            ).gt(mask_rate)
+            
+            # this writes the current msa (p_msa) to the tensor file
+            tensor_file.write("p_msa 1 inside pipeline.py:\n" + str(p_msa.tolist()))
+            tensor_file.write("\n")
+            # logs the shape of p_msa
+            print(p_msa.shape) 
+            
+            # Mask creation now depends on the position_to_be_masked argument
+            if position_to_be_masked is None:
+                p_msa_mask = torch.rand([num_pseudo_msa, num_res], generator=g).gt(mask_rate)
+            else:
+                assert 0 <= position_to_be_masked <= num_res, \
+                    "position_to_be_masked should be within the range of sequence length"
+                print("IT WORKED!")
+                p_msa_mask = torch.zeros([num_pseudo_msa, num_res])
+                p_msa_mask[:, position_to_be_masked] = 1
+            
+            # this writes the current mask (p_msa_mask) to the tensor file 
+            tensor_file.write("p_msa_mask 1 inside pipeline.py:\n" + str(p_msa_mask.tolist()))
+            tensor_file.write("\n")
+            # logs the shape of p_msa_mask
+            print(p_msa_mask.shape)
+            
+            # the generated mask (p_msa_mask) is concatenated with the original mask
             p_msa_mask = torch.cat((mask[None, :], p_msa_mask), dim=0)
+            
+            # writes the updated mask(p_msa_mask) to the tensor file
+            tensor_file.write("p_msa_mask 2 inside pipeline.py:\n" + str(p_msa_mask.tolist()))
+            tensor_file.write("\n")
+            # concatenates the p_msa with the original aatype
             p_msa = torch.cat((aatype[None, :], p_msa), dim=0)
+            
+            # applies the mask to the p_msa. This replaces the values of p_msa where the corresponding value of p_msa_mask is False with 21
             p_msa[~p_msa_mask.bool()] = 21
+            
+            # writes the masked p_msa to the tensor file
+            tensor_file.write("p_msa 2 inside pipeline.py:\n" + str(p_msa.tolist()))
+            tensor_file.write("\n")
+            tensor_file.write("\n")
+            tensor_file.write("\n")
+            # append the computed masked p_msa, p_msa_mask and corresponding residue_index to the object data.
             data.append({"p_msa": p_msa, "p_msa_mask": p_msa_mask, "residue_index":residue_index})
 
         yield utils.recursive_to(data, device=device), out_fname
 
+        # remember to close the file after use
+        tensor_file.close()
 
 def save_pdb(
         pos14: torch.Tensor,
@@ -400,6 +442,10 @@ def get_args() -> typing.Tuple[
     parser.add_argument(
         '--offset_rope', default=False, type=hipify_python.str2bool,
         help='offset RoPE sin/cos positional embedding given residue_index/chainbreaks'
+    )
+    parser.add_argument(
+        '--position_to_be_masked', default=None, type=int,
+        help='Position in the msa to be masked, overwrites the masking_rate!!'
     )
 
     args = parser.parse_args()

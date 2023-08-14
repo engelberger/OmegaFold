@@ -221,6 +221,7 @@ class OmegaFold(modules.OFModule):
         node_repr = self.plm_node_embedder(
             utils.normalize(node_repr, in_place=True)
         )
+        print()
         edge_repr = edge_repr.permute(1, 2, 0)
         edge_repr = self.plm_edge_embedder(
             utils.normalize(edge_repr, in_place=True)
